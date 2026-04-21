@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
@@ -64,11 +63,7 @@
         .search-box { position: relative; }
         .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }
         .search-box input { padding-left: 36px; }
-        .charts-section { flex: 1; overflow-y: auto; padding: 16px; }
-        .chart-container { background: var(--bg-card); border-radius: 8px; padding: 14px; margin-bottom: 14px; border: 1px solid var(--border-color); }
-        .chart-title { font-size: 12px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-        .chart-title i { color: var(--accent-red); }
-        .chart-wrapper { position: relative; height: 160px; }
+
         .mine-list-section { height: 180px; border-top: 1px solid var(--border-color); overflow: hidden; display: flex; flex-direction: column; }
         .mine-list-header { padding: 10px 16px; background: var(--bg-card); display: flex; justify-content: space-between; align-items: center; }
         .mine-list-title { font-size: 12px; font-weight: 600; }
@@ -146,20 +141,6 @@
                 <div class="filter-label"><i class="fas fa-chart-pie"></i> 置信度等级</div>
                 <select id="confidenceFilter"><option value="">全部</option></select>
             </div>
-            <div class="charts-section">
-                <div class="chart-container">
-                    <div class="chart-title"><i class="fas fa-gem"></i> 商品分布 TOP10</div>
-                    <div class="chart-wrapper"><canvas id="commodityChart"></canvas></div>
-                </div>
-                <div class="chart-container">
-                    <div class="chart-title"><i class="fas fa-chart-bar"></i> 国家分布 TOP10</div>
-                    <div class="chart-wrapper"><canvas id="countryChart"></canvas></div>
-                </div>
-                <div class="chart-container">
-                    <div class="chart-title"><i class="fas fa-shield-alt"></i> 置信度分布</div>
-                    <div class="chart-wrapper"><canvas id="confidenceChart"></canvas></div>
-                </div>
-            </div>
             <div class="mine-list-section">
                 <div class="mine-list-header">
                     <span class="mine-list-title">矿点列表 <span class="mine-count" id="filteredCount">0</span></span>
@@ -228,35 +209,26 @@
         }
 
         function initMap() {
-            map = L.map('map', { center: [35, 105], zoom: 4, minZoom: 2, maxZoom: 12, zoomControl: true });
+            map = L.map('map', { center: [20, 0], zoom: 2, minZoom: 2, maxZoom: 15, zoomControl: true });
             satelliteLayer.addTo(map);
+            // 加载完数据后自动调整视图显示所有矿点
+            map.whenReady(() => {
+                setTimeout(adjustToFitAllMines, 100);
+            });
         }
 
-        function initCharts() {
-            const topCommodities = Object.entries(STATS_DATA.commodities).sort((a,b) => b[1]-a[1]).slice(0, 10);
-            const topCountries = Object.entries(STATS_DATA.countries).sort((a,b) => b[1]-a[1]).slice(0, 10);
-
-            commodityChart = new Chart(document.getElementById('commodityChart'), {
-                type: 'doughnut',
-                data: { labels: topCommodities.map(c => c[0]), datasets: [{ data: topCommodities.map(c => c[1]), backgroundColor: ['#dc2626','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#6b7280','#78716c'], borderWidth: 0 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#888', font: { size: 9 }, boxWidth: 10 } } } }
+        // 调整视图显示所有矿点
+        function adjustToFitAllMines() {
+            if (allMines.length === 0) return;
+            const bounds = L.latLngBounds([]);
+            allMines.forEach(mine => {
+                if (mine['纬度'] && mine['经度']) {
+                    bounds.extend([parseFloat(mine['纬度']), parseFloat(mine['经度'])]);
+                }
             });
-
-            countryChart = new Chart(document.getElementById('countryChart'), {
-                type: 'bar',
-                data: { labels: topCountries.map(c => c[0]), datasets: [{ data: topCountries.map(c => c[1]), backgroundColor: '#dc2626', borderWidth: 0 }] },
-                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#2a2a2a' }, ticks: { color: '#888', font: { size: 9 } } }, y: { grid: { display: false }, ticks: { color: '#888', font: { size: 9 } } } } }
-            });
-
-            confidenceChart = new Chart(document.getElementById('confidenceChart'), {
-                type: 'pie',
-                data: { labels: ['高', '中', '很低'], datasets: [{ data: [STATS_DATA.confidence['高']||0, STATS_DATA.confidence['中']||0, STATS_DATA.confidence['很低']||0], backgroundColor: ['#166534', '#854d0e', '#991b1b'], borderWidth: 0 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#888', font: { size: 10 }, boxWidth: 12 } } } }
-            });
-
-            document.getElementById('totalCount').textContent = STATS_DATA.total;
-            document.getElementById('countryCount').textContent = Object.keys(STATS_DATA.countries).length;
-            document.getElementById('commodityCount').textContent = Object.keys(STATS_DATA.commodities).length;
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 });
+            }
         }
 
         function populateFilters() {
@@ -320,6 +292,7 @@
                 const secondary = mine['次要商品'] ? ` + ${mine['次要商品']}` : '';
 
                 marker.bindPopup(`<div class="popup-title">${mine['矿山名称']||mine['ICMMID']}</div><div class="popup-info"><strong>ICMM ID:</strong> ${mine['ICMMID']}</div><div class="popup-info"><strong>国家/地区:</strong> ${mine['国家或地区']||'-'}</div><div class="popup-info"><strong>主要商品:</strong> ${mine['主要商品']||'-'}${secondary}</div><div class="popup-info"><strong>资产类型:</strong> ${mine['资产类型']||'-'}</div>${mine['集团名称']?`<div class="popup-info"><strong>集团:</strong> ${mine['集团名称']}</div>`:''}<div class="popup-info"><strong>置信度:</strong> ${confidence}</div>`);
+                marker.on('click', () => { map.setView([lat, lng], 15); });
                 marker.addTo(map);
                 markers.push(marker);
             });
@@ -345,7 +318,7 @@
                 item.className = 'mine-item';
                 item.innerHTML = `<div class="mine-name">${mine['矿山名称']||mine['ICMMID']}</div><div class="mine-info"><span><i class="fas fa-map-marker-alt"></i> ${mine['国家或地区']||'-'}</span><span><i class="fas fa-gem"></i> ${mine['主要商品']||'-'}</span><span class="mine-tag ${badgeClass}">${confidence}</span></div>`;
                 if (mine['纬度'] && mine['经度']) {
-                    item.addEventListener('click', () => { map.setView([parseFloat(mine['纬度']), parseFloat(mine['经度'])], 10); });
+                    item.addEventListener('click', () => { map.setView([parseFloat(mine['纬度']), parseFloat(mine['经度'])], 15); });
                 }
                 list.appendChild(item);
             });
@@ -355,10 +328,7 @@
         document.getElementById('nextBtn').addEventListener('click', () => { const totalPages=Math.ceil(totalFiltered/pageSize); if(currentPage<totalPages){currentPage++;updateMarkers();updateMineList();} });
 
         function loadData() {
-            document.getElementById('loadingDetail').textContent = '加载统计数据...';
-            initCharts();
-
-            document.getElementById('loadingDetail').textContent = '初始化地图...';
+            document.getElementById('loadingDetail').textContent = '加载矿点数据...';
             initMap();
 
             document.getElementById('loadingDetail').textContent = '处理数据...';
